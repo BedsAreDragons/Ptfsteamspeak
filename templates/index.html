@@ -1,1 +1,51 @@
-n
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web VoIP</title>
+</head>
+<body>
+    <h1>Web VoIP Application</h1>
+    <button id="start">Start Talking</button>
+    <button id="stop">Stop Talking</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+    <script>
+        const socket = io.connect(window.location.origin);
+        let mediaRecorder;
+
+        document.getElementById('start').addEventListener('click', () => {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        const reader = new FileReader();
+                        reader.readAsArrayBuffer(event.data);
+                        reader.onloadend = () => {
+                            socket.emit('audio', reader.result);
+                        };
+                    };
+                });
+        });
+
+        document.getElementById('stop').addEventListener('click', () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+            }
+        });
+
+        socket.on('audio', (data) => {
+            const context = new AudioContext();
+            context.decodeAudioData(data, buffer => {
+                const source = context.createBufferSource();
+                source.buffer = buffer;
+                source.connect(context.destination);
+                source.start(0);
+            });
+        });
+    </script>
+</body>
+</html>
