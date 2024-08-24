@@ -1,54 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Microphone Toggle</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web VoIP with Delay</title>
 </head>
 <body>
-    <h1>Microphone Toggle Test</h1>
-    <button id="startButton">Start Talking</button>
+    <h1>Web VoIP Application</h1>
+    <button id="start">Start Talking</button>
+    <button id="stop">Stop Talking</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
     <script>
-        let isTalking = false;
-        let intervalId;
-        let mediaStream;
+        const socket = io.connect(window.location.origin);
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioContext = new AudioContext();
 
-        // Function to start and stop the microphone
-        async function toggleMicrophone() {
-            if (!isTalking) {
-                // Start talking
-                isTalking = true;
-                try {
-                    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    console.log('Microphone is on');
-                } catch (err) {
-                    console.error('Failed to access microphone:', err);
-                }
-            } else {
-                // Stop talking
-                isTalking = false;
-                if (mediaStream) {
-                    const tracks = mediaStream.getTracks();
-                    tracks.forEach(track => track.stop());
-                    console.log('Microphone is off');
-                }
-            }
-        }
+        document.getElementById('start').addEventListener('click', () => {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
 
-        // Loop to start and stop microphone every second
-        document.getElementById('startButton').onclick = function () {
-            if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-                isTalking = false;
-                if (mediaStream) {
-                    const tracks = mediaStream.getTracks();
-                    tracks.forEach(track => track.stop());
-                }
-                console.log('Stopped looping');
-            } else {
-                intervalId = setInterval(toggleMicrophone, 1000); // Toggle every 1 second
-                console.log('Started looping');
+                    mediaRecorder.ondataavailable = (event) => {
+                        socket.emit('audio', event.data);
+                    };
+
+                    mediaRecorder.start(200); // Send audio data every 200ms
+                });
+        });
+
+        document.getElementById('stop').addEventListener('click', () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
             }
-        };
+        });
+
+        socket.on('audio', (data) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                audioContext.decodeAudioData(reader.result)
+                    .then(buffer => {
+                        const source = audioContext.createBufferSource();
+                        source.buffer = buffer;
+                        source.connect(audioContext.destination);
+
+                        // Delay the playback by 1 second
+                        source.start(audioContext.currentTime + 1);
+                    });
+            };
+            reader.readAsArrayBuffer(data);
+        });
     </script>
 </body>
 </html>
