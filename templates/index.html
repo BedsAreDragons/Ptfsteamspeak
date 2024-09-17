@@ -1,51 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web VoIP</title>
+    <title>VoIP Example</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 </head>
 <body>
-    <h1>Web VoIP Application</h1>
     <button id="start">Start Talking</button>
     <button id="stop">Stop Talking</button>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
     <script>
-        const socket = io.connect(window.location.origin);
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+
         let mediaRecorder;
+        let audioStream;
 
-        document.getElementById('start').addEventListener('click', () => {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.start();
+        document.getElementById('start').addEventListener('click', async () => {
+            if (!mediaRecorder) {
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(audioStream);
 
-                    mediaRecorder.ondataavailable = (event) => {
-                        const reader = new FileReader();
-                        reader.readAsArrayBuffer(event.data);
-                        reader.onloadend = () => {
-                            socket.emit('audio', reader.result);
-                        };
-                    };
-                });
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        socket.emit('audio_data', event.data);
+                    }
+                };
+
+                mediaRecorder.start(100); // Send audio data every 100ms
+            }
         });
 
         document.getElementById('stop').addEventListener('click', () => {
             if (mediaRecorder) {
                 mediaRecorder.stop();
+                mediaRecorder = null;
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                }
             }
         });
 
-        socket.on('audio', (data) => {
-            const context = new AudioContext();
-            context.decodeAudioData(data, buffer => {
-                const source = context.createBufferSource();
-                source.buffer = buffer;
-                source.connect(context.destination);
-                source.start(0);
-            });
+        // To play audio on receiving data
+        socket.on('play_audio', (data) => {
+            const audioBlob = new Blob([data], { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            audio.play();
         });
     </script>
 </body>
-</html>
