@@ -1,50 +1,54 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web VoIP</title>
+    <title>Microphone Toggle</title>
 </head>
 <body>
-    <h1>Web VoIP Application</h1>
-    <button id="start">Start Talking</button>
-    <button id="stop">Stop Talking</button>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+    <h1>Microphone Toggle Test</h1>
+    <button id="startButton">Start Talking</button>
     <script>
-        const socket = io.connect(window.location.origin);
-        let mediaRecorder;
+        let isTalking = false;
+        let intervalId;
+        let mediaStream;
 
-        document.getElementById('start').addEventListener('click', () => {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.start();
-
-                    mediaRecorder.ondataavailable = (event) => {
-                        const reader = new FileReader();
-                        reader.readAsArrayBuffer(event.data);
-                        reader.onloadend = () => {
-                            socket.emit('audio', reader.result);
-                        };
-                    };
-                });
-        });
-
-        document.getElementById('stop').addEventListener('click', () => {
-            if (mediaRecorder) {
-                mediaRecorder.stop();
+        // Function to start and stop the microphone
+        async function toggleMicrophone() {
+            if (!isTalking) {
+                // Start talking
+                isTalking = true;
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    console.log('Microphone is on');
+                } catch (err) {
+                    console.error('Failed to access microphone:', err);
+                }
+            } else {
+                // Stop talking
+                isTalking = false;
+                if (mediaStream) {
+                    const tracks = mediaStream.getTracks();
+                    tracks.forEach(track => track.stop());
+                    console.log('Microphone is off');
+                }
             }
-        });
+        }
 
-        socket.on('audio', (data) => {
-            const context = new AudioContext();
-            context.decodeAudioData(data, buffer => {
-                const source = context.createBufferSource();
-                source.buffer = buffer;
-                source.connect(context.destination);
-                source.start(0);
-            });
-        });
+        // Loop to start and stop microphone every second
+        document.getElementById('startButton').onclick = function () {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+                isTalking = false;
+                if (mediaStream) {
+                    const tracks = mediaStream.getTracks();
+                    tracks.forEach(track => track.stop());
+                }
+                console.log('Stopped looping');
+            } else {
+                intervalId = setInterval(toggleMicrophone, 1000); // Toggle every 1 second
+                console.log('Started looping');
+            }
+        };
     </script>
 </body>
+</html>
